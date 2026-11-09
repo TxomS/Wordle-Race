@@ -1,16 +1,401 @@
 :root {
+  --text: #1a1a1b;
+  --muted: #5f6368;
+  --bg: #ffffff;
+  --border: #d3d6da;
+  --border-filled: #878a8c;
+  --green: #538d4e;
+  --yellow: #b59f3b;
+  --grey: #787c7e;
+  --key: #d3d6da;
+  --accent: #1a73e8;
+  --tile-size: min(15vw, 3.8rem);
+
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  color: #1a1a1b;
-  background: #ffffff;
+  color: var(--text);
+  background: var(--bg);
+}
+
+* {
+  box-sizing: border-box;
 }
 
 body {
   margin: 0;
 }
 
-.page {
-  max-width: 32rem;
-  margin: 0 auto;
-  padding: 2rem 1rem;
+#root {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* --- Layout ------------------------------------------------------------- */
+
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.6rem 1rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.app-title {
+  font: inherit;
+  font-size: 1.25rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  color: var(--text);
+}
+
+.app-code {
+  font-size: 0.9rem;
+  color: var(--muted);
+  letter-spacing: 0.08em;
+}
+
+.app-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 1rem 0 1.25rem;
+}
+
+.game {
+  width: 100%;
+  flex: 1;
+  padding-top: 2.4rem; /* room above the board for the toast */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.status {
+  color: var(--muted);
+}
+
+/* --- Home and notices ------------------------------------------------------ */
+
+.home,
+.notice {
+  width: 100%;
+  max-width: 28rem;
+  padding: 1rem;
   text-align: center;
+}
+
+.home h1,
+.notice h1 {
+  margin: 0.5rem 0;
+  font-size: 1.75rem;
+}
+
+.lead {
+  color: var(--muted);
+}
+
+.legend {
+  list-style: none;
+  padding: 0;
+  margin: 1.5rem auto;
+  display: flex;
+  flex-direction: column;
+  width: fit-content;
+  gap: 0.6rem;
+  text-align: left;
+}
+
+.legend li {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.swatch {
+  display: inline-grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  font-weight: 700;
+  color: #fff;
+}
+
+.swatch--green {
+  background: var(--green);
+}
+
+.swatch--yellow {
+  background: var(--yellow);
+}
+
+.swatch--grey {
+  background: var(--grey);
+}
+
+.error {
+  color: #b3261e;
+  font-weight: 600;
+}
+
+.actions {
+  display: flex;
+  justify-content: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.button {
+  font: inherit;
+  font-weight: 700;
+  padding: 0.65rem 1.4rem;
+  border-radius: 999px;
+  border: 2px solid var(--text);
+  background: var(--bg);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.button--primary {
+  background: var(--text);
+  color: var(--bg);
+}
+
+.button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* --- Board ----------------------------------------------------------------- */
+
+.board {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.board__row {
+  display: flex;
+  gap: 0.35rem;
+  justify-content: center;
+}
+
+.board__row--shake {
+  animation: shake 500ms;
+}
+
+.tile {
+  width: var(--tile-size);
+  height: var(--tile-size);
+  display: grid;
+  place-items: center;
+  border: 2px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  font-size: calc(var(--tile-size) * 0.55);
+  font-weight: 700;
+  text-transform: uppercase;
+  user-select: none;
+}
+
+.tile--filled {
+  border-color: var(--border-filled);
+  animation: pop 100ms;
+}
+
+.tile--green {
+  --tile-bg: var(--green);
+}
+
+.tile--yellow {
+  --tile-bg: var(--yellow);
+}
+
+.tile--grey {
+  --tile-bg: var(--grey);
+}
+
+.tile--green,
+.tile--yellow,
+.tile--grey {
+  background: var(--tile-bg);
+  border-color: var(--tile-bg);
+  color: #fff;
+}
+
+/* The tile turns over, and changes color while it is edge-on. */
+.tile--flip {
+  animation: flip 600ms ease both;
+}
+
+@keyframes flip {
+  0% {
+    transform: rotateX(0);
+    background: var(--bg);
+    border-color: var(--border-filled);
+    color: var(--text);
+  }
+  49% {
+    transform: rotateX(90deg);
+    background: var(--bg);
+    border-color: var(--border-filled);
+    color: var(--text);
+  }
+  50% {
+    transform: rotateX(90deg);
+    background: var(--tile-bg);
+    border-color: var(--tile-bg);
+    color: #fff;
+  }
+  100% {
+    transform: rotateX(0);
+    background: var(--tile-bg);
+    border-color: var(--tile-bg);
+    color: #fff;
+  }
+}
+
+@keyframes pop {
+  50% {
+    transform: scale(1.1);
+  }
+}
+
+@keyframes shake {
+  20%,
+  60% {
+    transform: translateX(-6px);
+  }
+  40%,
+  80% {
+    transform: translateX(6px);
+  }
+}
+
+/* --- Keyboard ----------------------------------------------------------------- */
+
+.keyboard {
+  width: 100%;
+  max-width: 32rem;
+  padding: 0 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  touch-action: manipulation;
+}
+
+.keyboard__row {
+  display: flex;
+  justify-content: center;
+  gap: 0.35rem;
+}
+
+.keyboard__row--inset {
+  padding: 0 4%;
+}
+
+.key {
+  flex: 1 1 0;
+  min-width: 0;
+  height: 3.4rem;
+  border: 0;
+  border-radius: 4px;
+  background: var(--key);
+  color: var(--text);
+  font: inherit;
+  font-weight: 700;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.key--wide {
+  flex: 1.6 1 0;
+  font-size: 0.75rem;
+}
+
+.key--green {
+  background: var(--green);
+  color: #fff;
+}
+
+.key--yellow {
+  background: var(--yellow);
+  color: #fff;
+}
+
+.key--grey {
+  background: var(--grey);
+  color: #fff;
+}
+
+.key:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* --- Toast and result -------------------------------------------------------------- */
+
+.toast-region {
+  position: fixed;
+  top: 3.6rem;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.toast {
+  background: var(--text);
+  color: var(--bg);
+  padding: 0.6rem 1rem;
+  border-radius: 4px;
+  font-weight: 700;
+}
+
+.result {
+  width: calc(100% - 2rem);
+  max-width: 26rem;
+  padding: 0.9rem 1.25rem;
+  border: 2px solid var(--border-filled);
+  border-radius: 8px;
+  text-align: center;
+}
+
+.result h2 {
+  margin: 0 0 0.25rem;
+  font-size: 1.25rem;
+}
+
+.result p {
+  margin: 0 0 0.75rem;
+}
+
+.result--won {
+  border-color: var(--green);
+}
+
+.result--lost {
+  border-color: #b3261e;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tile--flip,
+  .tile--filled,
+  .board__row--shake {
+    animation: none;
+  }
 }
