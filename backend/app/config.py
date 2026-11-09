@@ -13,10 +13,12 @@ _DEFAULT_WORDS_DIR = Path(__file__).resolve().parent.parent / "data"
 class Settings:
     db_path: str  # the SQLite file
     words_dir: Path  # folder holding answers.txt and allowed.txt
+    presence_timeout_seconds: float = 15.0  # silence longer than this shows as "disconnected"
 
 
 def load_settings() -> Settings:
     return Settings(
         db_path=os.environ.get("DB_PATH", "wordle.db"),
         words_dir=Path(os.environ.get("WORDS_DIR", str(_DEFAULT_WORDS_DIR))),
+        presence_timeout_seconds=float(os.environ.get("PRESENCE_TIMEOUT_SECONDS", "15")),
     )

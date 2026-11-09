@@ -10,6 +10,19 @@ ANSWER = "crane"
 WRONG_WORDS = ["slate", "sloth", "boost", "robot", "abbey", "babes"]  # six different wrong guesses
 
 
+class Clock:
+    """A fake clock: tests move time forward by hand instead of waiting."""
+
+    def __init__(self, now: float = 1000.0) -> None:
+        self.now = now
+
+    def __call__(self) -> float:
+        return self.now
+
+    def advance(self, seconds: float) -> None:
+        self.now += seconds
+
+
 @pytest.fixture
 def words_dir(tmp_path):
     directory = tmp_path / "words"

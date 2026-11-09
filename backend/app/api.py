@@ -26,9 +26,9 @@ class GuessRequest(BaseModel):
     index: int | None = Field(default=None, ge=0)
 
 
-class CreatedGame(BaseModel):
+class PlayerSession(BaseModel):
     code: str
-    token: str  # the player's secret. It is sent once, here, and kept by the browser.
+    token: str  # the player's secret. It is sent once, when the player is created, and kept by the browser.
     game: GameView
 
 
@@ -43,9 +43,15 @@ def require_token(x_player_token: str | None = Header(default=None)) -> str:
 
 
 @router.post("", status_code=201)
-def create_game(body: CreateGameRequest, service: GameService = Depends(get_service)) -> CreatedGame:
+def create_game(body: CreateGameRequest, service: GameService = Depends(get_service)) -> PlayerSession:
     token, game = service.create_game(body.mode)
-    return CreatedGame(code=game.code, token=token, game=game)
+    return PlayerSession(code=game.code, token=token, game=game)
+
+
+@router.post("/{code}/join", status_code=201)
+def join_game(code: str, service: GameService = Depends(get_service)) -> PlayerSession:
+    token, game = service.join_game(code)
+    return PlayerSession(code=game.code, token=token, game=game)
 
 
 @router.get("/{code}")
