@@ -37,5 +37,12 @@ services:
       retries: 10
       start_period: 2s
 
+  # Run by `make test`. Not started by `make setup`, because of the "test" profile.
+  tests:
+    profiles: ["test"]
+    build:
+      context: ./backend
+      target: test
+
 volumes:
   wordle-data:
