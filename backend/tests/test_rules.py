@@ -29,7 +29,8 @@ from app.rules import (
 )
 
 ANSWER = "crane"
-WRONG = ["slate", "sloth", "boost", "robot", "abbey", "babes"]  # six different wrong words
+# Eight different wrong words, so the tests still work if MAX_GUESSES is changed (up to 8).
+WRONG = ["slate", "sloth", "boost", "robot", "abbey", "babes", "angry", "badge"]
 ALLOWED = frozenset(WRONG + [ANSWER])
 
 
@@ -223,7 +224,7 @@ def test_when_two_solving_guesses_arrive_together_the_first_one_applied_wins():
 
 def test_both_players_running_out_of_guesses_is_a_draw():
     game = race_game()
-    for word in WRONG:  # a and b alternate
+    for word in WRONG[:MAX_GUESSES]:  # a and b alternate
         play(game, "a", word)
         assert game.status == PLAYING
         play(game, "b", word)

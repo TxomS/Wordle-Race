@@ -28,6 +28,10 @@ export default function App() {
   const match = GAME_PATH.exec(path);
   const code = match ? match[1].toUpperCase() : null;
 
+  useEffect(() => {
+    document.title = code ? `Game ${code} - Wordle Race` : "Wordle Race";
+  }, [code]);
+
   return (
     <>
       <header className="app-header">

@@ -7,7 +7,8 @@ from app.config import Settings
 from app.main import create_app
 
 ANSWER = "crane"
-WRONG_WORDS = ["slate", "sloth", "boost", "robot", "abbey", "babes"]  # six different wrong guesses
+# Eight different wrong guesses, so the tests still work if MAX_GUESSES is changed (up to 8).
+WRONG_WORDS = ["slate", "sloth", "boost", "robot", "abbey", "babes", "angry", "badge"]
 
 
 class Clock:

@@ -14,6 +14,12 @@ class Settings:
     db_path: str  # the SQLite file
     words_dir: Path  # folder holding answers.txt and allowed.txt
     presence_timeout_seconds: float = 15.0  # silence longer than this shows as "disconnected"
+    # A game is deleted when nobody has guessed in or joined it for this long AND no page
+    # has asked the server about it for this long (an open page keeps its game alive).
+    game_ttl_minutes: float = 15.0
+    # How often the background sweep looks for abandoned games. A game can therefore live
+    # up to this much longer than the limit above.
+    sweep_interval_minutes: float = 5.0
 
 
 def load_settings() -> Settings:
@@ -21,4 +27,6 @@ def load_settings() -> Settings:
         db_path=os.environ.get("DB_PATH", "wordle.db"),
         words_dir=Path(os.environ.get("WORDS_DIR", str(_DEFAULT_WORDS_DIR))),
         presence_timeout_seconds=float(os.environ.get("PRESENCE_TIMEOUT_SECONDS", "15")),
+        game_ttl_minutes=float(os.environ.get("GAME_TTL_MINUTES", "15")),
+        sweep_interval_minutes=float(os.environ.get("SWEEP_EVERY_MINUTES", "5")),
     )

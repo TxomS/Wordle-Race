@@ -1,14 +1,21 @@
-"""The use cases: create a game, join it, read it, submit a guess.
+"""The use cases: create a game, join it, read it, submit a guess, and clean up.
 
-Each one follows the same shape: load the game from the store, apply a rule from
-rules.py, save, and return what the player is allowed to see (views.py).
+Each game use case follows the same shape: load the game from the store, apply a rule
+from rules.py, save, and return what the player is allowed to see (views.py).
 Changes run inside one store.write() transaction, so they never interleave.
 Every successful request also records that the player was just seen (presence.py).
+
+Logging: key events are logged (a game created, a player joined, a guess accepted, a
+game finished), identified by the game code. Logs never contain the hidden word, the
+words players guess, or tokens: whoever reads the logs must learn nothing that the
+players are not allowed to see.
 """
 
 import hashlib
+import logging
 import random
 import secrets
+import time
 
 from app import rules
 from app.presence import Presence
@@ -16,6 +23,8 @@ from app.rules import Game, GameError
 from app.store import GameStore
 from app.views import GameView, game_view
 from app.words import WordLists, pick_answer
+
+log = logging.getLogger("wordle")
 
 # Room codes avoid look-alike characters: no I, L, O, 0 or 1. 31 symbols ^ 5 places = 28 million codes.
 CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
@@ -57,18 +66,52 @@ def _player_id(token: str) -> str:
     return hash_token(token)
 
 
+def _player_number(game: Game, player_id: str) -> int:
+    return 1 + [player.id for player in game.players].index(player_id)
+
+
+def _describe_result(game: Game) -> str:
+    if game.winner_id is None:
+        return "nobody won"
+    return f"player {_player_number(game, game.winner_id)} won"
+
+
 class GameService:
     def __init__(
         self,
         store: GameStore,
         words: WordLists,
         presence: Presence,
+        ttl_seconds: float,
         rng: random.Random | None = None,
     ) -> None:
         self.store = store
         self.words = words
         self.presence = presence
+        self.ttl_seconds = ttl_seconds
         self.rng = rng  # tests can pass a seeded Random; None means secure randomness
+
+    def cleanup(self) -> int:
+        """Delete abandoned games. A game is abandoned when BOTH hold:
+          - nobody has guessed in it or joined it for longer than the time limit, and
+          - no player's page has asked the server about it for longer than the time limit.
+        The second rule keeps a game alive while someone still has it open: a lobby
+        waiting for a friend, or a player who walked away to think. After a backend
+        restart, players not yet seen get the benefit of the doubt (see presence.py).
+
+        The background sweep (sweeper.py) calls this every few minutes."""
+        cutoff = time.time() - self.ttl_seconds  # the database stores wall-clock times
+        with self.store.write() as conn:
+            abandoned = [
+                game.code for game in self.store.list_idle(conn, cutoff) if not self._someone_is_here(game)
+            ]
+            removed = self.store.delete(conn, abandoned)
+        if removed:
+            log.info("removed %d abandoned game(s)", removed)
+        return removed
+
+    def _someone_is_here(self, game: Game) -> bool:
+        return any(self.presence.seen_within(game.code, p.id, self.ttl_seconds) for p in game.players)
 
     def create_game(self, mode: str) -> tuple[str, GameView]:
         """Create a game with its first player. Returns that player's secret token and view."""
@@ -83,6 +126,7 @@ class GameService:
                 created = self.store.insert(conn, game)
             if created:
                 self.presence.touch(game.code, player_id)
+                log.info("game created code=%s mode=%s", game.code, mode)
                 return token, self._view(game, player_id)
         raise RuntimeError("could not find a free game code")
 
@@ -98,6 +142,7 @@ class GameService:
             rules.add_player(game, player_id)
             self.store.save(conn, game)
         self.presence.touch(game.code, player_id)
+        log.info("player joined code=%s player=%d", game.code, _player_number(game, player_id))
         return token, self._view(game, player_id)
 
     def get_game(self, code: str, token: str) -> GameView:
@@ -120,6 +165,16 @@ class GameService:
             rules.submit_guess(game, player_id, word, self.words.allowed, expected_index)
             self.store.save(conn, game)
         self.presence.touch(game.code, player_id)
+
+        player = rules.get_player(game, player_id)
+        log.info(
+            "guess accepted code=%s player=%d guesses=%d",
+            game.code,
+            _player_number(game, player_id),
+            len(player.guesses),
+        )
+        if game.status == rules.FINISHED:
+            log.info("game finished code=%s result=%s", game.code, _describe_result(game))
         return self._view(game, player_id)
 
     def _view(self, game: Game, player_id: str) -> GameView:

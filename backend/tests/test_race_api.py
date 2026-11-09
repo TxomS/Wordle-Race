@@ -1,11 +1,13 @@
 """Race mode through the HTTP interface: joining, fairness, secrecy, presence, isolation."""
 
+import logging
 import threading
 from concurrent.futures import ThreadPoolExecutor
 
 from fastapi.testclient import TestClient
 
 from app.main import create_app
+from app.rules import MAX_GUESSES
 from conftest import ANSWER, WRONG_WORDS, Clock
 
 A_WORDS = ["slate", "sloth", "abbey"]  # guessed only by player A
@@ -193,7 +195,7 @@ def test_two_winning_guesses_at_the_same_moment_produce_exactly_one_winner(setti
 
 def test_both_players_running_out_of_guesses_is_a_draw(client):
     code, a, b = start_race(client)
-    for word in WRONG_WORDS:
+    for word in WRONG_WORDS[:MAX_GUESSES]:
         guess(client, code, a, word)
         assert get(client, code, a).json()["status"] == "playing"
         guess(client, code, b, word)
@@ -206,7 +208,7 @@ def test_both_players_running_out_of_guesses_is_a_draw(client):
 
 def test_a_player_out_of_guesses_waits_while_the_other_plays_on(client):
     code, a, b = start_race(client)
-    for word in WRONG_WORDS:
+    for word in WRONG_WORDS[:MAX_GUESSES]:
         guess(client, code, a, word)
 
     game = get(client, code, a).json()
@@ -256,6 +258,25 @@ def test_a_race_survives_a_backend_restart(settings):
 
     assert guess(restarted, code, b, ANSWER).json()["result"]["outcome"] == "won"
     assert get(restarted, code, a).json()["result"]["outcome"] == "lost"
+
+
+# --- Logging ---------------------------------------------------------------------------
+
+
+def test_the_logs_describe_what_happened_but_never_reveal_secrets(client, caplog):
+    caplog.set_level(logging.INFO, logger="wordle")
+    code, a, b = start_race(client)
+    guess(client, code, a, "slate")
+    guess(client, code, b, ANSWER)  # B wins
+
+    log_text = "\n".join(caplog.messages).lower()
+    for event in ("game created", "player joined", "guess accepted", "game finished", "player 2 won"):
+        assert event in log_text
+    assert code.lower() in log_text
+
+    # Whoever reads the logs must learn nothing the players may not see.
+    for secret in (ANSWER, "slate", a["X-Player-Token"], b["X-Player-Token"]):
+        assert secret.lower() not in log_text
 
 
 # --- Presence --------------------------------------------------------------------------

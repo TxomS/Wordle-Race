@@ -109,6 +109,17 @@ class GameStore:
             return False
         return True
 
+    def list_idle(self, conn: sqlite3.Connection, cutoff: float) -> list[Game]:
+        """Every game last changed before `cutoff` (a Unix timestamp). Only guesses and
+        joins count as a change; merely polling a game does not."""
+        rows = conn.execute("SELECT data FROM games WHERE updated_at < ?", (cutoff,)).fetchall()
+        return [_load(row[0]) for row in rows]
+
+    def delete(self, conn: sqlite3.Connection, codes: list[str]) -> int:
+        """Delete these games. Returns how many were asked for."""
+        conn.executemany("DELETE FROM games WHERE code = ?", [(code,) for code in codes])
+        return len(codes)
+
     def save(self, conn: sqlite3.Connection, game: Game) -> None:
         conn.execute(
             "UPDATE games SET data = ?, status = ?, updated_at = ? WHERE code = ?",

@@ -10,8 +10,14 @@ services:
     restart: unless-stopped
     environment:
       DB_PATH: /data/wordle.db
+      PRESENCE_TIMEOUT_SECONDS: ${PRESENCE_TIMEOUT_SECONDS:-15}
+      GAME_TTL_MINUTES: ${GAME_TTL_MINUTES:-15}
+      SWEEP_EVERY_MINUTES: ${SWEEP_EVERY_MINUTES:-5}
     volumes:
       - wordle-data:/data
+      # The word lists are mounted from the repository so they can be edited without
+      # rebuilding: change backend/data/answers.txt, then `docker compose restart backend`.
+      - ./backend/data:/app/data:ro
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=2)"]
       interval: 5s
@@ -43,6 +49,16 @@ services:
     build:
       context: ./backend
       target: test
+
+  # Also run by `make test`: builds the site, tests it, and checks that no word list
+  # ended up inside the JavaScript. The word lists are mounted read-only for that check.
+  frontend-tests:
+    profiles: ["test"]
+    build:
+      context: ./frontend
+      target: test
+    volumes:
+      - ./backend/data:/words:ro
 
 volumes:
   wordle-data:

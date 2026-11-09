@@ -48,6 +48,30 @@ def test_players_are_tracked_per_game():
     assert not presence.is_connected("G1", "p1")
 
 
+def test_seen_within_answers_for_the_window_it_is_given():
+    presence, clock = make()
+    presence.touch("G1", "p1")
+    clock.advance(600)
+    assert presence.seen_within("G1", "p1", 900)
+    assert not presence.seen_within("G1", "p1", 600)
+
+
+def test_a_player_not_seen_since_startup_gets_one_window_of_benefit_of_the_doubt():
+    presence, clock = make()
+    assert presence.seen_within("G1", "never-seen", 900)
+    clock.advance(900)
+    assert not presence.seen_within("G1", "never-seen", 900)
+
+
+def test_how_long_entries_are_remembered_can_be_changed():
+    clock = Clock()
+    presence = Presence(15.0, clock, remember_seconds=100)
+    presence.touch("G1", "p1")
+    clock.advance(200)
+    presence.touch("G2", "p2")  # triggers the clean-up
+    assert ("G1", "p1") not in presence._last_seen
+
+
 def test_old_entries_are_forgotten_so_memory_does_not_grow_forever():
     presence, clock = make()
     presence.touch("G1", "p1")

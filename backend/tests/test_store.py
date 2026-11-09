@@ -1,5 +1,6 @@
 """The SQLite store: saving, loading, rolling back and, above all, taking turns."""
 
+import sqlite3
 import threading
 
 import pytest
@@ -54,6 +55,21 @@ def test_a_failed_write_is_rolled_back_completely(store):
 
     with store.read() as conn:
         assert store.load(conn, "ABC23").next_seq == game.next_seq
+
+
+def test_idle_games_can_be_listed_and_deleted(store):
+    with store.write() as conn:
+        store.insert(conn, make_game("OLD11"))
+        store.insert(conn, make_game("NEW22"))
+    with sqlite3.connect(store.path) as conn:
+        conn.execute("UPDATE games SET updated_at = 1000 WHERE code = 'OLD11'")
+
+    with store.write() as conn:
+        assert [game.code for game in store.list_idle(conn, cutoff=2000)] == ["OLD11"]
+        assert store.delete(conn, ["OLD11"]) == 1
+    with store.read() as conn:
+        assert store.load(conn, "OLD11") is None
+        assert store.load(conn, "NEW22") is not None
 
 
 def test_data_is_still_there_for_a_new_store_on_the_same_file(store):

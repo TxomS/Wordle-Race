@@ -1,11 +1,7 @@
 // One square of the board. `letter` is missing on the opponent's board: it is only
 // ever given colors, so it has no letters to show.
 
-const MEANING = {
-  green: "correct",
-  yellow: "in the word, wrong place",
-  grey: "not in the word",
-};
+import { MEANING } from "../meaning.js";
 
 export default function Tile({ letter, color, animate = false, delay = 0 }) {
   const classes = ["tile"];

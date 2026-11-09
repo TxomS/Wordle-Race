@@ -8,6 +8,12 @@ const POLL_MS = 1500;
 const POLL_HIDDEN_MS = 5000;
 const POLL_MAX_BACKOFF_MS = 10000;
 
+// A solo game has no opponent to wait for, but the page still asks the server every 30 s.
+// That tells the server the page is open, so the game is not deleted while the player is
+// away thinking. (The server deletes a game only when nobody has touched it AND nobody has
+// asked about it for 15 minutes.)
+const HEARTBEAT_MS = 30000;
+
 // Everything about one game that the screen needs: loading it, keeping it fresh
 // (in a race), and sending guesses.
 //
@@ -66,8 +72,10 @@ export function useGame(code) {
     };
   }, [code, attempt]);
 
-  // Keep a race fresh by asking the server again and again until it is finished.
-  const polling = state.phase === "ready" && state.game.mode === "race" && state.game.status !== "finished";
+  // Ask the server again and again until the game is finished: quickly in a race, to see
+  // the opponent's moves; slowly in a solo game, only to show the page is still open.
+  const mode = state.game?.mode;
+  const polling = state.phase === "ready" && state.game.status !== "finished";
   useEffect(() => {
     if (!polling) return undefined;
     let cancelled = false;
@@ -102,9 +110,9 @@ export function useGame(code) {
     }
 
     function schedule() {
-      const base = document.hidden ? POLL_HIDDEN_MS : POLL_MS;
+      const base = mode === "race" ? (document.hidden ? POLL_HIDDEN_MS : POLL_MS) : HEARTBEAT_MS;
       // After failures wait longer each time (3 s, 6 s, 10 s...) instead of hammering a server that is down.
-      const delay = failures ? Math.min(base * 2 ** failures, POLL_MAX_BACKOFF_MS) : base;
+      const delay = failures ? Math.min(base * 2 ** failures, Math.max(base, POLL_MAX_BACKOFF_MS)) : base;
       timer = setTimeout(poll, delay);
     }
 
@@ -122,7 +130,7 @@ export function useGame(code) {
       clearTimeout(timer);
       document.removeEventListener("visibilitychange", onVisibilityChange);
     };
-  }, [code, polling]);
+  }, [code, polling, mode]);
 
   // Send one guess. Resolves to { ok: true } or { ok: false, error }; it never throws.
   const submit = useCallback(

@@ -562,6 +562,53 @@ body {
   border-color: #b3261e;
 }
 
+/* --- A second signal besides color ------------------------------------------------
+   A check mark on correct tiles and keys, a dot on "in the word" ones, nothing on grey,
+   so the result can be read without telling green from yellow. The small opponent board
+   is too tiny for symbols; it stays color-only on screen (screen readers get labels). */
+
+.tile,
+.key {
+  position: relative;
+}
+
+.tile--green::after,
+.tile--yellow::after,
+.key--green::after,
+.key--yellow::after {
+  position: absolute;
+  line-height: 1;
+  pointer-events: none;
+}
+
+.tile--green::after,
+.tile--yellow::after {
+  right: 0.25rem;
+  bottom: 0.2rem;
+  font-size: calc(var(--tile-size) * 0.22);
+}
+
+.key--green::after,
+.key--yellow::after {
+  top: 0.2rem;
+  right: 0.3rem;
+  font-size: 0.6rem;
+}
+
+.tile--green::after,
+.key--green::after {
+  content: "\2713"; /* check mark */
+}
+
+.tile--yellow::after,
+.key--yellow::after {
+  content: "\25CF"; /* dot */
+}
+
+.board--small .tile::after {
+  display: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .tile--flip,
   .tile--filled,

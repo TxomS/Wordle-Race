@@ -2,12 +2,14 @@
 
 import re
 import sqlite3
+import time
 
 import pytest
 from fastapi.testclient import TestClient
 
 from app.main import create_app
-from conftest import ANSWER, WRONG_WORDS
+from app.rules import MAX_GUESSES, WORD_LENGTH
+from conftest import ANSWER, WRONG_WORDS, Clock
 
 CODE_PATTERN = re.compile(r"[A-HJKMNP-Z2-9]{5}")  # no I, L, O, 0 or 1
 GAME_FIELDS = {"code", "mode", "status", "word_length", "max_guesses", "me", "opponent", "result"}
@@ -49,7 +51,7 @@ def test_create_a_solo_game(client):
     assert game["code"] == code
     assert game["mode"] == "solo"
     assert game["status"] == "playing"
-    assert (game["word_length"], game["max_guesses"]) == (5, 6)
+    assert (game["word_length"], game["max_guesses"]) == (WORD_LENGTH, MAX_GUESSES)
     assert game["me"] == {"status": "playing", "guesses": []}
     assert game["opponent"] is None
     assert game["result"] is None
@@ -74,12 +76,13 @@ def test_play_to_a_win(client):
     assert game["result"] == {"outcome": "won", "reason": "solved", "answer": ANSWER}
 
 
-def test_six_wrong_guesses_lose_and_reveal_the_answer(client):
+def test_running_out_of_guesses_loses_and_reveals_the_answer(client):
+    words = WRONG_WORDS[:MAX_GUESSES]
     code, headers, _ = start_solo(client)
-    for word in WRONG_WORDS[:-1]:
+    for word in words[:-1]:
         assert guess(client, code, headers, word).json()["status"] == "playing"
 
-    game = guess(client, code, headers, WRONG_WORDS[-1]).json()
+    game = guess(client, code, headers, words[-1]).json()
     assert game["status"] == "finished"
     assert game["result"] == {"outcome": "lost", "reason": "out_of_guesses", "answer": ANSWER}
 
@@ -186,7 +189,8 @@ def test_the_answer_never_reaches_the_client_before_the_game_ends(client):
     seen.append(guess(client, code, headers, "zzzzz").text)  # refused: not a word
     seen.append(guess(client, code, headers, "abc").text)  # refused: bad format
     seen.append(guess(client, code, headers, "slate", index=5).text)  # refused: stale
-    for word in WRONG_WORDS[:-1]:  # five wrong guesses; the game is still going
+    words = WRONG_WORDS[:MAX_GUESSES]
+    for word in words[:-1]:  # all but the last wrong guess: the game is still going
         seen.append(guess(client, code, headers, word).text)
         seen.append(get_game(client, code, headers).text)
     seen.append(client.get("/api/openapi.json").text)
@@ -195,7 +199,7 @@ def test_the_answer_never_reaches_the_client_before_the_game_ends(client):
         assert ANSWER not in text.lower()
 
     # After the game ends the answer is revealed.
-    final = guess(client, code, headers, WRONG_WORDS[-1])
+    final = guess(client, code, headers, words[-1])
     assert ANSWER in final.text.lower()
 
 
@@ -215,6 +219,92 @@ def test_the_player_token_is_not_stored_in_the_database(client, settings):
         rows = conn.execute("SELECT code, data, status FROM games").fetchall()
     assert rows, "the game should have been saved"
     assert all(body["token"] not in str(column) for row in rows for column in row)
+
+
+# --- Cleanup of old games ---------------------------------------------------------
+
+
+def run_cleanup(client):
+    """Run the clean-up once, as the background sweep does every few minutes."""
+    return client.app.state.service.cleanup()
+
+
+def make_everything_old(settings):
+    """Pretend every game in the database was last played two days ago."""
+    with sqlite3.connect(settings.db_path) as conn:
+        conn.execute("UPDATE games SET updated_at = ?", (time.time() - 2 * 24 * 3600,))
+
+
+def test_abandoned_games_are_deleted_by_the_cleanup(settings):
+    clock = Clock()
+    client = TestClient(create_app(settings, clock=clock))
+    old_code, old_headers, _ = start_solo(client)
+    make_everything_old(settings)
+    recent_code, recent_headers, _ = start_solo(client)
+
+    clock.advance(16 * 60)  # nobody has asked about the old game for longer than the limit
+    run_cleanup(client)
+    assert get_game(client, old_code, old_headers).status_code == 404
+    assert get_game(client, recent_code, recent_headers).status_code == 200  # recent games stay
+
+
+def test_a_game_that_someone_is_still_polling_is_not_deleted_even_when_idle(settings):
+    clock = Clock()
+    client = TestClient(create_app(settings, clock=clock))
+    code, headers, _ = start_solo(client)
+    make_everything_old(settings)  # no guess for a very long time ...
+
+    clock.advance(10 * 60)
+    assert get_game(client, code, headers).status_code == 200  # ... but the page is open and asks
+    clock.advance(10 * 60)
+    run_cleanup(client)  # idle, but someone asked 10 minutes ago, inside the limit
+    assert get_game(client, code, headers).status_code == 200  # (this request counts as asking too)
+
+    clock.advance(16 * 60)  # now the page has been silent for longer than the limit
+    run_cleanup(client)
+    assert get_game(client, code, headers).status_code == 404
+
+
+def set_idle_for(settings, code, seconds):
+    """Pretend one game was last played `seconds` ago."""
+    with sqlite3.connect(settings.db_path) as conn:
+        conn.execute("UPDATE games SET updated_at = ? WHERE code = ?", (time.time() - seconds, code))
+
+
+def test_the_default_limit_is_fifteen_minutes(settings):
+    clock = Clock()
+    client = TestClient(create_app(settings, clock=clock))
+    stale_code, stale_headers, _ = start_solo(client)
+    fresh_code, fresh_headers, _ = start_solo(client)
+    set_idle_for(settings, stale_code, 20 * 60)  # idle for 20 minutes
+    set_idle_for(settings, fresh_code, 10 * 60)  # idle for 10 minutes
+
+    clock.advance(16 * 60)  # nobody has asked about either game for longer than the limit
+    run_cleanup(client)
+    assert get_game(client, stale_code, stale_headers).status_code == 404
+    assert get_game(client, fresh_code, fresh_headers).status_code == 200
+
+
+def stored_codes(settings):
+    with sqlite3.connect(settings.db_path) as conn:
+        return {row[0] for row in conn.execute("SELECT code FROM games")}
+
+
+def test_after_a_restart_idle_games_get_one_limit_of_benefit_of_the_doubt(settings):
+    clock = Clock()
+    first_run = TestClient(create_app(settings, clock=clock))
+    code, _, _ = start_solo(first_run)
+    make_everything_old(settings)
+
+    # A restart empties the memory of who is around, and a page may be polling this very
+    # moment, so nothing is deleted yet.
+    restarted = TestClient(create_app(settings, clock=clock))
+    run_cleanup(restarted)
+    assert code in stored_codes(settings)
+
+    clock.advance(16 * 60)  # nobody turned up for a whole limit: now it really is abandoned
+    run_cleanup(restarted)
+    assert code not in stored_codes(settings)
 
 
 # --- Refresh and restart -------------------------------------------------------

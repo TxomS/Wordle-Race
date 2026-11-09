@@ -1,3 +1,5 @@
+import { MEANING } from "../meaning.js";
+
 const ROWS = [
   ["q", "w", "e", "r", "t", "y", "u", "i", "o", "p"],
   ["a", "s", "d", "f", "g", "h", "j", "k", "l"],
@@ -23,7 +25,7 @@ export default function Keyboard({ state, onKey, disabled }) {
                 type="button"
                 className={classes.filter(Boolean).join(" ")}
                 disabled={disabled}
-                aria-label={key === "Backspace" ? "Delete" : key}
+                aria-label={[key === "Backspace" ? "Delete" : key, MEANING[state[key]]].filter(Boolean).join(", ")}
                 // Keep focus where it is, so pressing Enter on the real keyboard later
                 // does not "click" the key that was last tapped.
                 onMouseDown={(event) => event.preventDefault()}

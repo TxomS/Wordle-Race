@@ -11,10 +11,11 @@ setup:
 	docker compose up --build -d --wait
 	@echo Wordle Race is running at http://localhost:$(WEB_PORT)
 
-# Build and run all tests inside a container. Exits non-zero if any test fails.
+# Build and run all tests inside containers (backend, then frontend). Exits non-zero if any test fails.
 test:
-	docker compose --profile test build tests
+	docker compose --profile test build tests frontend-tests
 	docker compose --profile test run --rm tests
+	docker compose --profile test run --rm frontend-tests
 
 # Stop and remove the containers. The game database volume is kept.
 down:

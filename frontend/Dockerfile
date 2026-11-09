@@ -6,6 +6,10 @@ RUN npm ci
 COPY . .
 RUN npm run build
 
+# Test image, used by `make test`: the built site plus its tests (see tests/).
+FROM build AS test
+CMD ["node", "--test", "tests/*.test.js"]
+
 # Stage 2: serve it with nginx. Only the built files are copied, so the final
 # image contains no Node, no sources and no node_modules.
 FROM nginx:alpine AS runtime
