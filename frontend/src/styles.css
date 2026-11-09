@@ -81,7 +81,7 @@ body {
   flex-direction: column;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
+  gap: 0.75rem;
 }
 
 .status {
@@ -179,6 +179,162 @@ body {
   cursor: default;
 }
 
+/* --- Join form, lobby, race layout -------------------------------------------- */
+
+.join {
+  margin: 1.75rem auto 0;
+  max-width: 18rem;
+}
+
+.join label {
+  display: block;
+  margin-bottom: 0.5rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.join__row {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.join__input {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  font-size: 1.1rem;
+  font-weight: 700;
+  letter-spacing: 0.25em;
+  text-align: center;
+  text-transform: uppercase;
+  padding: 0.55rem 0.5rem;
+  border: 2px solid var(--border-filled);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.lobby {
+  width: 100%;
+  max-width: 28rem;
+  padding: 1rem;
+  text-align: center;
+}
+
+.lobby h1 {
+  margin: 0.5rem 0;
+  font-size: 1.6rem;
+}
+
+.lobby__code {
+  margin: 0.75rem 0;
+  font-size: 2.75rem;
+  font-weight: 800;
+  letter-spacing: 0.3em;
+  padding-left: 0.3em; /* balances the trailing letter-spacing so the code looks centered */
+}
+
+.lobby__link {
+  margin: 0 0 1rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px dashed var(--border-filled);
+  border-radius: 6px;
+  color: var(--muted);
+  font-size: 0.9rem;
+  word-break: break-all;
+}
+
+.lobby__note,
+.note {
+  color: var(--muted);
+}
+
+.banner {
+  margin: 0;
+  padding: 0.4rem 0.9rem;
+  border-radius: 6px;
+  background: #fff4ce;
+  color: #5c4400;
+  font-weight: 600;
+}
+
+.boards {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 1rem 2.5rem;
+  padding: 0 1rem;
+}
+
+.opponent {
+  display: flex;
+  flex-direction: row; /* narrow screens: a compact strip above the board */
+  align-items: center;
+  gap: 1rem;
+  order: -1;
+}
+
+.opponent__info {
+  text-align: left;
+}
+
+.opponent__title {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.opponent__count {
+  margin: 0.25rem 0 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.presence {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0.25rem 0 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.presence__dot {
+  width: 0.65rem;
+  height: 0.65rem;
+  border-radius: 50%;
+  background: var(--grey);
+}
+
+.presence--on .presence__dot {
+  background: var(--green);
+}
+
+.presence--off {
+  color: #b3261e;
+}
+
+.presence--off .presence__dot {
+  background: #b3261e;
+}
+
+@media (min-width: 720px) {
+  .opponent {
+    order: 0; /* wide screens: next to your board */
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .opponent__info {
+    text-align: center;
+  }
+
+  .opponent .presence {
+    justify-content: center;
+  }
+}
+
 /* --- Board ----------------------------------------------------------------- */
 
 .board {
@@ -194,6 +350,20 @@ body {
 
 .board__row--shake {
   animation: shake 500ms;
+}
+
+/* The compact board used for the opponent. */
+.board--small {
+  --tile-size: 1.15rem;
+  gap: 0.2rem;
+}
+
+.board--small .board__row {
+  gap: 0.2rem;
+}
+
+.board--small .tile {
+  border-width: 1px;
 }
 
 .tile {

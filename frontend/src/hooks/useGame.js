@@ -2,28 +2,42 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { getGame, submitGuess } from "../api.js";
 import { forgetToken, loadToken } from "../session.js";
 
-// Everything about one game that the screen needs: loading it, and sending guesses.
+// How often a race asks the server what the opponent is doing. Wordle turns take
+// seconds, so a delay of at most 1.5 s is invisible. A hidden tab asks less often.
+const POLL_MS = 1500;
+const POLL_HIDDEN_MS = 5000;
+const POLL_MAX_BACKOFF_MS = 10000;
+
+// Everything about one game that the screen needs: loading it, keeping it fresh
+// (in a race), and sending guesses.
 //
 // phase:
 //   "loading"    waiting for the server
 //   "ready"      `game` holds the latest view from the server
-//   "no-access"  this tab has no valid token for the game (it belongs to another tab)
+//   "no-access"  this tab has no valid token for the game
 //   "not-found"  no game with this code
-//   "error"      the server could not be reached; `error` says why
+//   "error"      the server could not be reached on the first load; `error` says why
+//
+// `reconnecting` is true while polling cannot reach the server. The last known game
+// stays on screen, and polling resumes by itself when the server is back.
 //
 // The server is the authority: the screen never changes the board by itself, it only
 // shows the `game` the server last sent.
 export function useGame(code) {
   const [state, setState] = useState({ phase: "loading", game: null, error: null });
+  const [reconnecting, setReconnecting] = useState(false);
   const [attempt, setAttempt] = useState(0); // bumped by retry() to load again
   const tokenRef = useRef(null);
   const gameRef = useRef(null);
+  const changes = useRef(0); // counts guesses sent or applied; see the polling note below
   gameRef.current = state.game;
 
+  // Load the game once.
   useEffect(() => {
     let cancelled = false;
     const token = loadToken(code);
     tokenRef.current = token;
+    setReconnecting(false);
 
     if (!token) {
       setState({ phase: "no-access", game: null, error: null });
@@ -52,14 +66,74 @@ export function useGame(code) {
     };
   }, [code, attempt]);
 
+  // Keep a race fresh by asking the server again and again until it is finished.
+  const polling = state.phase === "ready" && state.game.mode === "race" && state.game.status !== "finished";
+  useEffect(() => {
+    if (!polling) return undefined;
+    let cancelled = false;
+    let timer;
+    let failures = 0;
+
+    async function poll() {
+      const changesBefore = changes.current;
+      try {
+        const game = await getGame(code, tokenRef.current);
+        if (cancelled) return;
+        failures = 0;
+        setReconnecting(false);
+        // If we sent a guess while this request was travelling, its answer may be older
+        // than what we already know. Throw it away; the next poll will be current.
+        if (changes.current === changesBefore) setState({ phase: "ready", game, error: null });
+      } catch (error) {
+        if (cancelled) return;
+        if (error.code === "NOT_FOUND") {
+          setState({ phase: "not-found", game: null, error });
+          return;
+        }
+        if (error.status === 401) {
+          forgetToken(code);
+          setState({ phase: "no-access", game: null, error });
+          return;
+        }
+        failures += 1;
+        setReconnecting(true);
+      }
+      schedule();
+    }
+
+    function schedule() {
+      const base = document.hidden ? POLL_HIDDEN_MS : POLL_MS;
+      // After failures wait longer each time (3 s, 6 s, 10 s...) instead of hammering a server that is down.
+      const delay = failures ? Math.min(base * 2 ** failures, POLL_MAX_BACKOFF_MS) : base;
+      timer = setTimeout(poll, delay);
+    }
+
+    function onVisibilityChange() {
+      if (!document.hidden) {
+        clearTimeout(timer);
+        poll(); // coming back to the tab: catch up at once
+      }
+    }
+
+    schedule();
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, [code, polling]);
+
   // Send one guess. Resolves to { ok: true } or { ok: false, error }; it never throws.
   const submit = useCallback(
     async (word) => {
       const token = tokenRef.current;
+      changes.current += 1;
       try {
         // `index` is how many guesses we believe we have made. If the server disagrees
         // (a double click, a retried request) it refuses instead of using up a guess.
         const game = await submitGuess(code, token, word, gameRef.current.me.guesses.length);
+        changes.current += 1;
         setState({ phase: "ready", game, error: null });
         return { ok: true };
       } catch (error) {
@@ -67,6 +141,7 @@ export function useGame(code) {
           // Our picture of the game was wrong: load the real one.
           try {
             const game = await getGame(code, token);
+            changes.current += 1;
             setState({ phase: "ready", game, error: null });
           } catch {
             /* keep what we have; the original error is reported below */
@@ -80,5 +155,5 @@ export function useGame(code) {
 
   const retry = useCallback(() => setAttempt((n) => n + 1), []);
 
-  return { ...state, submit, retry };
+  return { ...state, reconnecting, submit, retry };
 }

@@ -3,7 +3,8 @@ import Tile from "./Tile.jsx";
 
 // A grid of maxGuesses rows. `guesses` are the rows the server has scored: each has
 // `colors`, and `word` only on your own board. `typed` is the row you are typing now.
-export default function Board({ guesses, typed = "", maxGuesses, wordLength, shake = false, label }) {
+// size="small" is the compact version used for the opponent.
+export default function Board({ guesses, typed = "", maxGuesses, wordLength, shake = false, size, label }) {
   // Only rows that arrive after the board first appeared get the flip animation, so a
   // refresh does not replay the whole game.
   const initialCount = useRef(guesses.length);
@@ -34,7 +35,7 @@ export default function Board({ guesses, typed = "", maxGuesses, wordLength, sha
   }
 
   return (
-    <div className="board" role="group" aria-label={label}>
+    <div className={size === "small" ? "board board--small" : "board"} role="group" aria-label={label}>
       {rows}
     </div>
   );

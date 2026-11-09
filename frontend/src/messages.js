@@ -7,7 +7,7 @@ const MESSAGES = {
   NO_GUESSES_LEFT: "You have no guesses left",
   STALE_INDEX: "Your board was out of date. Try again",
   GAME_NOT_STARTED: "Waiting for your opponent to join",
-  ROOM_FULL: "That game already has two players",
+  ROOM_FULL: "That game is already full",
   NOT_FOUND: "No game with that code",
   NOT_IN_GAME: "You are not part of this game",
   NETWORK: "Cannot reach the server. Check your connection",

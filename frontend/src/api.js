@@ -1,5 +1,9 @@
 // The only file that talks to the server. Everything else calls these functions.
 
+// Give up on a request after this long, so the screen can say "cannot reach the server"
+// instead of waiting forever on a connection that will never answer.
+const REQUEST_TIMEOUT_MS = 10000;
+
 export class ApiError extends Error {
   constructor(status, code, message) {
     super(message);
@@ -20,6 +24,7 @@ async function request(method, path, { token, body } = {}) {
       headers,
       body: body === undefined ? undefined : JSON.stringify(body),
       cache: "no-store",
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
   } catch {
     throw new ApiError(0, "NETWORK", "Cannot reach the server.");
@@ -44,6 +49,8 @@ async function request(method, path, { token, body } = {}) {
 }
 
 export const createGame = (mode) => request("POST", "/games", { body: { mode } });
+
+export const joinGame = (code) => request("POST", `/games/${code}/join`);
 
 export const getGame = (code, token) => request("GET", `/games/${code}`, { token });
 
