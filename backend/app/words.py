@@ -9,14 +9,11 @@ message (a broken list should be noticed immediately, not mid-game).
 """
 
 import random
-import re
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from app.rules import WORD_LENGTH
-
-_WORD_PATTERN = re.compile(rf"[a-z]{{{WORD_LENGTH}}}")
+from app.rules import WORD_LENGTH, is_valid_format
 
 
 @dataclass(frozen=True)
@@ -32,7 +29,7 @@ def read_word_file(path: Path) -> list[str]:
         word = raw.strip().lower()
         if not word:
             continue
-        if not _WORD_PATTERN.fullmatch(word):
+        if not is_valid_format(word):
             raise ValueError(f"{path.name} line {line_number}: {raw!r} is not a {WORD_LENGTH}-letter word (a-z only)")
         words.append(word)
     return words
@@ -40,7 +37,7 @@ def read_word_file(path: Path) -> list[str]:
 
 def load_word_lists(directory: str | Path) -> WordLists:
     directory = Path(directory)
-    answers = tuple(dict.fromkeys(read_word_file(directory / "answers.txt")))  # dedupe, keep order
+    answers = tuple(dict.fromkeys(read_word_file(directory / "answers.txt")))
     if not answers:
         raise ValueError("answers.txt contains no words")
     # Every answer must also be a valid guess, even if allowed.txt forgot it.
