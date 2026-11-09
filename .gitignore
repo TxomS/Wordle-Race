@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+
+# Node / frontend build
+node_modules/
+dist/
+
+# Local database files and environment overrides
+*.db
+*.db-wal
+*.db-shm
+.env
+
+# Editors, OS and tool folders
+.vscode/
+.idea/
+.claude/
+.DS_Store
+Thumbs.db

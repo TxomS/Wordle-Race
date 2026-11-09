@@ -1,0 +1,41 @@
+# Fixed project name, so volume and network names do not depend on the folder
+# the repository was cloned into.
+name: wordle-race
+
+services:
+  backend:
+    build:
+      context: ./backend
+      target: runtime
+    restart: unless-stopped
+    environment:
+      DB_PATH: /data/wordle.db
+    volumes:
+      - wordle-data:/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+
+  frontend:
+    build:
+      context: ./frontend
+      target: runtime
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "${WEB_PORT:-8080}:80"
+    healthcheck:
+      # 127.0.0.1 on purpose: "localhost" may resolve to IPv6, where nginx is not listening.
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 2s
+
+volumes:
+  wordle-data:

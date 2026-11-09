@@ -1,0 +1,12 @@
+# Use LF line endings in the repo and in the working tree, so the Makefile,
+# Dockerfiles and shell scripts behave the same on Windows and on Linux.
+* text=auto eol=lf
+
+# Binary files: never rewrite them.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.woff binary
+*.woff2 binary
