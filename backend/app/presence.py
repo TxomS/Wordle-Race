@@ -10,10 +10,13 @@ their token, so polling and guessing both count) less than a given time ago.
 
 After a backend restart this memory is empty. Without a rule for that, everyone would
 look absent until their next poll: both players would flash as "disconnected", and a
-cleanup could delete a game a player is looking at right now. So a player who has not
-been seen since startup gets the benefit of the doubt for one window (the same length
-as the question being asked); people who really left stop polling and count as absent
-once that window ends.
+cleanup could delete a game a player is looking at right now. So for a short grace
+period after startup (2 minutes by default) a player who has not been seen yet gets the
+benefit of the doubt. That is plenty: an open page checks in within seconds (a race polls
+every 1.5 to 5 s, a solo game sends a heartbeat every 30 s, and even a heavily throttled
+background tab checks in about once a minute). Once the grace period ends, anyone who has
+not checked in counts as gone. For short questions, like the 15-second "connected" check,
+the grace is no longer than the question itself.
 """
 
 import threading
@@ -22,6 +25,7 @@ from collections.abc import Callable
 
 _PRUNE_EVERY = 60  # seconds between clean-ups of this memory
 _REMEMBER_FOR = 3600  # by default, entries older than this are dropped to keep memory small
+RESTART_GRACE_SECONDS = 120  # benefit of the doubt for players not yet seen after a start
 
 
 class Presence:
@@ -30,10 +34,12 @@ class Presence:
         timeout_seconds: float,
         clock: Callable[[], float] = time.monotonic,
         remember_seconds: float = _REMEMBER_FOR,
+        grace_seconds: float = RESTART_GRACE_SECONDS,
     ) -> None:
         self.timeout = timeout_seconds  # silence longer than this shows as "disconnected"
         self._clock = clock  # tests pass a fake clock they can move forward
         self._remember = remember_seconds  # must be at least as long as any window we are asked about
+        self._grace = grace_seconds
         self._started = clock()
         self._last_prune = self._started
         self._last_seen: dict[tuple[str, str], float] = {}
@@ -54,7 +60,9 @@ class Presence:
         now = self._clock()
         last = self._last_seen.get((code, player_id))
         if last is None:
-            return now - self._started < seconds  # not seen since startup: benefit of the doubt
+            # Not seen since startup: benefit of the doubt, but only for a short grace period
+            # (never longer than the question being asked).
+            return now - self._started < min(seconds, self._grace)
         return now - last < seconds
 
     def is_connected(self, code: str, player_id: str) -> bool:

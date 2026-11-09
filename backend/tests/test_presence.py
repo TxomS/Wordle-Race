@@ -56,10 +56,28 @@ def test_seen_within_answers_for_the_window_it_is_given():
     assert not presence.seen_within("G1", "p1", 600)
 
 
-def test_a_player_not_seen_since_startup_gets_one_window_of_benefit_of_the_doubt():
+def test_a_player_not_seen_since_startup_gets_two_minutes_of_benefit_of_the_doubt():
     presence, clock = make()
+    assert presence.seen_within("G1", "never-seen", 900)  # asked about a 15-minute window
+    clock.advance(119)
     assert presence.seen_within("G1", "never-seen", 900)
-    clock.advance(900)
+    clock.advance(1)  # two minutes since startup
+    assert not presence.seen_within("G1", "never-seen", 900)
+
+
+def test_the_grace_is_never_longer_than_the_question_being_asked():
+    presence, clock = make()
+    assert presence.seen_within("G1", "never-seen", 15)
+    clock.advance(15)  # a 15-second question gets at most 15 seconds of grace
+    assert not presence.seen_within("G1", "never-seen", 15)
+
+
+def test_the_grace_period_can_be_changed():
+    clock = Clock()
+    presence = Presence(15.0, clock, grace_seconds=30)
+    clock.advance(29)
+    assert presence.seen_within("G1", "never-seen", 900)
+    clock.advance(1)
     assert not presence.seen_within("G1", "never-seen", 900)
 
 

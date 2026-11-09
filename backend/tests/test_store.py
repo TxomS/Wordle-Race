@@ -65,11 +65,24 @@ def test_idle_games_can_be_listed_and_deleted(store):
         conn.execute("UPDATE games SET updated_at = 1000 WHERE code = 'OLD11'")
 
     with store.write() as conn:
-        assert [game.code for game in store.list_idle(conn, cutoff=2000)] == ["OLD11"]
+        assert [game.code for game in store.list_idle(conn, cutoff=2000, finished=False)] == ["OLD11"]
         assert store.delete(conn, ["OLD11"]) == 1
     with store.read() as conn:
         assert store.load(conn, "OLD11") is None
         assert store.load(conn, "NEW22") is not None
+
+
+def test_finished_games_are_listed_separately_from_unfinished_ones(store):
+    with store.write() as conn:
+        store.insert(conn, make_game("DONE1"))
+        store.insert(conn, make_game("LIVE2"))
+    with sqlite3.connect(store.path) as conn:
+        conn.execute("UPDATE games SET updated_at = 1000")
+        conn.execute("UPDATE games SET status = 'finished' WHERE code = 'DONE1'")
+
+    with store.read() as conn:
+        assert [game.code for game in store.list_idle(conn, cutoff=2000, finished=True)] == ["DONE1"]
+        assert [game.code for game in store.list_idle(conn, cutoff=2000, finished=False)] == ["LIVE2"]
 
 
 def test_data_is_still_there_for_a_new_store_on_the_same_file(store):

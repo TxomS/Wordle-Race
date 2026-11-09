@@ -146,7 +146,10 @@ export default function Game({ code, navigate }) {
   if (phase === "not-found") {
     return (
       <Notice title="Game not found" navigate={navigate}>
-        <p>There is no game with the code {code}.</p>
+        <p>
+          There is no game with the code {code}. If it has ended, it was cleared: finished games are removed a
+          couple of minutes after they end.
+        </p>
       </Notice>
     );
   }

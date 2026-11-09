@@ -67,10 +67,10 @@ export default function Home({ navigate }) {
 
       <div className="actions">
         <button type="button" className="button button--primary" onClick={() => start("solo")} disabled={busy}>
-          Play solo
+          Play Solo
         </button>
         <button type="button" className="button" onClick={() => start("race")} disabled={busy}>
-          Create a race
+          Play Co-op
         </button>
       </div>
 
@@ -88,7 +88,7 @@ export default function Home({ navigate }) {
             autoComplete="off"
             spellCheck={false}
           />
-          <button type="submit" className="button" disabled={busy}>
+          <button type="submit" className="button button--join" disabled={busy}>
             Join
           </button>
         </div>

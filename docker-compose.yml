@@ -12,7 +12,8 @@ services:
       DB_PATH: /data/wordle.db
       PRESENCE_TIMEOUT_SECONDS: ${PRESENCE_TIMEOUT_SECONDS:-15}
       GAME_TTL_MINUTES: ${GAME_TTL_MINUTES:-15}
-      SWEEP_EVERY_MINUTES: ${SWEEP_EVERY_MINUTES:-5}
+      FINISHED_GAME_TTL_MINUTES: ${FINISHED_GAME_TTL_MINUTES:-2}
+      SWEEP_EVERY_MINUTES: ${SWEEP_EVERY_MINUTES:-1}
     volumes:
       - wordle-data:/data
       # The word lists are mounted from the repository so they can be edited without

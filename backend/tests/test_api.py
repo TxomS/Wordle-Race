@@ -285,12 +285,63 @@ def test_the_default_limit_is_fifteen_minutes(settings):
     assert get_game(client, fresh_code, fresh_headers).status_code == 200
 
 
+def finish(client, code, headers):
+    """Win the game, so that it is finished."""
+    assert guess(client, code, headers, ANSWER).json()["status"] == "finished"
+
+
+def test_finished_games_are_removed_after_two_minutes_not_fifteen(settings):
+    clock = Clock()
+    client = TestClient(create_app(settings, clock=clock))
+    done_code, done_headers, _ = start_solo(client)
+    finish(client, done_code, done_headers)
+    playing_code, playing_headers, _ = start_solo(client)
+    set_idle_for(settings, done_code, 3 * 60)  # it finished 3 minutes ago
+    set_idle_for(settings, playing_code, 3 * 60)  # nothing has happened in the other one for 3 minutes
+
+    clock.advance(121)  # and no page has asked about either for longer than two minutes
+    run_cleanup(client)
+    assert get_game(client, done_code, done_headers).status_code == 404  # finished: gone
+    assert get_game(client, playing_code, playing_headers).status_code == 200  # still being played: kept
+
+
+def test_a_finished_game_is_kept_for_its_first_two_minutes(settings):
+    clock = Clock()
+    client = TestClient(create_app(settings, clock=clock))
+    code, headers, _ = start_solo(client)
+    finish(client, code, headers)
+    set_idle_for(settings, code, 60)  # it finished a minute ago
+
+    clock.advance(121)
+    run_cleanup(client)
+    assert code in stored_codes(settings)
+
+
+def test_a_finished_game_that_a_page_is_still_asking_about_is_not_removed(settings):
+    """A slow page (say a throttled background tab) may only learn who won a little later."""
+    clock = Clock()
+    client = TestClient(create_app(settings, clock=clock))
+    code, headers, _ = start_solo(client)
+    finish(client, code, headers)
+    set_idle_for(settings, code, 10 * 60)  # it finished a long time ago
+
+    clock.advance(100)
+    assert get_game(client, code, headers).status_code == 200  # the slow page asks
+    clock.advance(100)
+    run_cleanup(client)  # it asked 100 seconds ago: inside the two minutes
+    assert code in stored_codes(settings)
+
+    clock.advance(121)  # now it has been silent for longer than two minutes
+    run_cleanup(client)
+    assert code not in stored_codes(settings)
+
+
 def stored_codes(settings):
     with sqlite3.connect(settings.db_path) as conn:
         return {row[0] for row in conn.execute("SELECT code FROM games")}
 
 
-def test_after_a_restart_idle_games_get_one_limit_of_benefit_of_the_doubt(settings):
+def test_after_a_restart_idle_games_get_two_minutes_of_benefit_of_the_doubt(settings):
     clock = Clock()
     first_run = TestClient(create_app(settings, clock=clock))
     code, _, _ = start_solo(first_run)
@@ -302,7 +353,11 @@ def test_after_a_restart_idle_games_get_one_limit_of_benefit_of_the_doubt(settin
     run_cleanup(restarted)
     assert code in stored_codes(settings)
 
-    clock.advance(16 * 60)  # nobody turned up for a whole limit: now it really is abandoned
+    clock.advance(119)  # still inside the two minutes
+    run_cleanup(restarted)
+    assert code in stored_codes(settings)
+
+    clock.advance(2)  # nobody turned up within two minutes: now it really is abandoned
     run_cleanup(restarted)
     assert code not in stored_codes(settings)
 

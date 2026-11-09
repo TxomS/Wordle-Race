@@ -167,6 +167,10 @@ body {
   background: var(--bg);
   color: var(--text);
   cursor: pointer;
+  transition:
+    transform 120ms ease,
+    box-shadow 120ms ease,
+    background-color 120ms ease;
 }
 
 .button--primary {
@@ -174,9 +178,53 @@ body {
   color: var(--bg);
 }
 
+/* The Join button is a different kind of action: it submits the code typed beside it. So it
+   looks different from the two "start a game" buttons: a solid gray, with the same slightly
+   squared corners as the code box it belongs to. The gray is dark enough for white text to
+   be easy to read (contrast about 6:1), so it does not look switched off. */
+.button--join {
+  background: #5f6368;
+  border-color: #5f6368;
+  color: #fff;
+  border-radius: 8px;
+}
+
 .button:disabled {
   opacity: 0.5;
   cursor: default;
+}
+
+/* Hover feedback, so it is clear a button can be clicked: it lifts a little, gets a shadow,
+   and changes shade. Only on devices that really hover: on a touch screen the effect would
+   stay stuck on the button after a tap. */
+@media (hover: hover) {
+  .button:not(:disabled):hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.18);
+  }
+
+  .button--primary:not(:disabled):hover {
+    background: #3c4043; /* the near-black button gets lighter */
+  }
+
+  .button:not(.button--primary):not(.button--join):not(:disabled):hover {
+    background: #eef0f2; /* the white button gets a light grey fill */
+  }
+
+  .button--join:not(:disabled):hover {
+    background: #44474b; /* the gray button gets darker */
+    border-color: #44474b;
+  }
+
+  .key:not(:disabled):hover {
+    filter: brightness(0.92);
+  }
+}
+
+/* Pressed: it settles back down. */
+.button:not(:disabled):active {
+  transform: translateY(0);
+  box-shadow: none;
 }
 
 /* --- Join form, lobby, race layout -------------------------------------------- */
@@ -562,54 +610,15 @@ body {
   border-color: #b3261e;
 }
 
-/* --- A second signal besides color ------------------------------------------------
-   A check mark on correct tiles and keys, a dot on "in the word" ones, nothing on grey,
-   so the result can be read without telling green from yellow. The small opponent board
-   is too tiny for symbols; it stays color-only on screen (screen readers get labels). */
-
-.tile,
-.key {
-  position: relative;
-}
-
-.tile--green::after,
-.tile--yellow::after,
-.key--green::after,
-.key--yellow::after {
-  position: absolute;
-  line-height: 1;
-  pointer-events: none;
-}
-
-.tile--green::after,
-.tile--yellow::after {
-  right: 0.25rem;
-  bottom: 0.2rem;
-  font-size: calc(var(--tile-size) * 0.22);
-}
-
-.key--green::after,
-.key--yellow::after {
-  top: 0.2rem;
-  right: 0.3rem;
-  font-size: 0.6rem;
-}
-
-.tile--green::after,
-.key--green::after {
-  content: "\2713"; /* check mark */
-}
-
-.tile--yellow::after,
-.key--yellow::after {
-  content: "\25CF"; /* dot */
-}
-
-.board--small .tile::after {
-  display: none;
-}
-
 @media (prefers-reduced-motion: reduce) {
+  .button {
+    transition: none;
+  }
+
+  .button:not(:disabled):hover {
+    transform: none; /* the shade still changes, but nothing moves */
+  }
+
   .tile--flip,
   .tile--filled,
   .board__row--shake {

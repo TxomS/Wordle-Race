@@ -29,7 +29,13 @@ def create_app(settings: Settings | None = None, clock: Callable[[], float] = ti
     ttl_seconds = settings.game_ttl_minutes * 60
     # Presence must be remembered at least as long as the cleanup asks about it.
     presence = Presence(settings.presence_timeout_seconds, clock, remember_seconds=max(3600, ttl_seconds))
-    service = GameService(store, words, presence, ttl_seconds=ttl_seconds)
+    service = GameService(
+        store,
+        words,
+        presence,
+        ttl_seconds=ttl_seconds,
+        finished_ttl_seconds=settings.finished_game_ttl_minutes * 60,
+    )
     sweeper = Sweeper(service.cleanup, interval_seconds=settings.sweep_interval_minutes * 60)
 
     @asynccontextmanager

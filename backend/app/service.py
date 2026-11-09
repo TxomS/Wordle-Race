@@ -83,35 +83,43 @@ class GameService:
         words: WordLists,
         presence: Presence,
         ttl_seconds: float,
+        finished_ttl_seconds: float,
         rng: random.Random | None = None,
     ) -> None:
         self.store = store
         self.words = words
         self.presence = presence
-        self.ttl_seconds = ttl_seconds
+        self.ttl_seconds = ttl_seconds  # for a game being played or waited for
+        self.finished_ttl_seconds = finished_ttl_seconds  # for a game that has finished
         self.rng = rng  # tests can pass a seeded Random; None means secure randomness
 
     def cleanup(self) -> int:
         """Delete abandoned games. A game is abandoned when BOTH hold:
-          - nobody has guessed in it or joined it for longer than the time limit, and
-          - no player's page has asked the server about it for longer than the time limit.
+          - nobody has guessed in it or joined it for longer than its time limit, and
+          - no player's page has asked the server about it for longer than that limit.
         The second rule keeps a game alive while someone still has it open: a lobby
-        waiting for a friend, or a player who walked away to think. After a backend
-        restart, players not yet seen get the benefit of the doubt (see presence.py).
+        waiting for a friend, or a player who walked away to think.
 
-        The background sweep (sweeper.py) calls this every few minutes."""
-        cutoff = time.time() - self.ttl_seconds  # the database stores wall-clock times
+        The limit is long (15 minutes by default) for a game that is still being played or
+        waited for, and short (2 minutes) for a game that has finished: its result has been
+        shown, and a page stops asking about a game once it has seen it finish. Two minutes
+        is still enough for a slow background tab to ask once more and see who won.
+
+        After a backend restart, players not yet seen get a short benefit of the doubt (see
+        presence.py). The background sweep (sweeper.py) calls this every minute."""
+        now = time.time()  # the database stores wall-clock times
         with self.store.write() as conn:
-            abandoned = [
-                game.code for game in self.store.list_idle(conn, cutoff) if not self._someone_is_here(game)
-            ]
+            stale = self.store.list_idle(conn, now - self.ttl_seconds, finished=False)
+            stale += self.store.list_idle(conn, now - self.finished_ttl_seconds, finished=True)
+            abandoned = [game.code for game in stale if not self._someone_is_here(game)]
             removed = self.store.delete(conn, abandoned)
         if removed:
             log.info("removed %d abandoned game(s)", removed)
         return removed
 
     def _someone_is_here(self, game: Game) -> bool:
-        return any(self.presence.seen_within(game.code, p.id, self.ttl_seconds) for p in game.players)
+        limit = self.finished_ttl_seconds if game.status == rules.FINISHED else self.ttl_seconds
+        return any(self.presence.seen_within(game.code, p.id, limit) for p in game.players)
 
     def create_game(self, mode: str) -> tuple[str, GameView]:
         """Create a game with its first player. Returns that player's secret token and view."""
