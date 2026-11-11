@@ -142,14 +142,48 @@ export default function Game({ code, navigate }) {
     }
   }
 
+  // The creator's lobby was closed while they were looking at it: offer a fresh one.
+  async function startNewRace() {
+    setBusy(true);
+    setJoinError(null);
+    try {
+      const session = await createGame("race");
+      saveToken(session.code, session.token);
+      navigate(`/g/${session.code}`);
+    } catch (problem) {
+      setJoinError(messageFor(problem));
+      setBusy(false);
+    }
+  }
+
   if (phase === "loading") return <p className="status">Loading game...</p>;
   if (phase === "not-found") {
     return (
       <Notice title="Game not found" navigate={navigate}>
         <p>
-          There is no game with the code {code}. If it has ended, it was cleared: finished games are removed a
-          couple of minutes after they end.
+          There is no game with the code {code}. It may have ended or expired: a race that nobody joins closes
+          after a while, and finished games are removed a couple of minutes after they end.
         </p>
+      </Notice>
+    );
+  }
+  if (phase === "lobby-expired") {
+    return (
+      <Notice
+        title="This lobby has closed"
+        navigate={navigate}
+        actions={
+          <button type="button" className="button button--primary" onClick={startNewRace} disabled={busy}>
+            {busy ? "Starting..." : "Start a new race"}
+          </button>
+        }
+      >
+        <p>Nobody joined in time, or this page was away for a while. Start a new race to get a fresh code.</p>
+        {joinError && (
+          <p className="error" role="alert">
+            {joinError}
+          </p>
+        )}
       </Notice>
     );
   }

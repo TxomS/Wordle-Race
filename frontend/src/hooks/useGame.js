@@ -22,6 +22,7 @@ const HEARTBEAT_MS = 30000;
 //   "ready"      `game` holds the latest view from the server
 //   "no-access"  this tab has no valid token for the game
 //   "not-found"  no game with this code
+//   "lobby-expired"  the lobby we were waiting in has been closed by the server
 //   "error"      the server could not be reached on the first load; `error` says why
 //
 // `reconnecting` is true while polling cannot reach the server. The last known game
@@ -95,7 +96,9 @@ export function useGame(code) {
       } catch (error) {
         if (cancelled) return;
         if (error.code === "NOT_FOUND") {
-          setState({ phase: "not-found", game: null, error });
+          // If we were looking at a lobby, say so: the server closes a lobby nobody joins in time.
+          const wasWaiting = gameRef.current?.status === "waiting";
+          setState({ phase: wasWaiting ? "lobby-expired" : "not-found", game: null, error });
           return;
         }
         if (error.status === 401) {

@@ -109,15 +109,18 @@ class GameStore:
             return False
         return True
 
-    def list_idle(self, conn: sqlite3.Connection, cutoff: float, *, finished: bool) -> list[Game]:
-        """Every game last changed before `cutoff` (a Unix timestamp): the finished ones, or
-        all the others, depending on `finished`. Only guesses and joins count as a change;
-        merely polling a game does not."""
-        if finished:
-            query = "SELECT data FROM games WHERE updated_at < ? AND status = 'finished'"
-        else:
-            query = "SELECT data FROM games WHERE updated_at < ? AND status != 'finished'"
-        return [_load(row[0]) for row in conn.execute(query, (cutoff,)).fetchall()]
+    def list_idle(self, conn: sqlite3.Connection, cutoff: float, status: str) -> list[Game]:
+        """Every game with this status that was last changed before `cutoff` (a Unix
+        timestamp). Only guesses and joins count as a change; merely polling a game does not."""
+        rows = conn.execute("SELECT data FROM games WHERE updated_at < ? AND status = ?", (cutoff, status))
+        return [_load(row[0]) for row in rows.fetchall()]
+
+    def list_waiting(self, conn: sqlite3.Connection) -> list[tuple[Game, float]]:
+        """Every lobby (a race waiting for its second player), with the time it was created
+        as a Unix timestamp. Nothing changes a lobby until someone joins, so the time it was
+        last changed is the time it was created."""
+        rows = conn.execute("SELECT data, updated_at FROM games WHERE status = 'waiting'").fetchall()
+        return [(_load(data), created) for data, created in rows]
 
     def delete(self, conn: sqlite3.Connection, codes: list[str]) -> int:
         """Delete these games. Returns how many were asked for."""

@@ -1,6 +1,7 @@
 """Race mode through the HTTP interface: joining, fairness, secrecy, presence, isolation."""
 
 import logging
+import sqlite3
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -253,6 +254,99 @@ def test_a_newcomer_is_recorded_before_the_next_one_may_look_at_the_seat(setting
         results = list(pool.map(lambda _: try_to_join(), range(2)))
 
     assert sorted(r.status_code for r in results) == [201, 409]
+
+
+# --- Lobbies that nobody joins ---------------------------------------------------------
+
+
+def run_cleanup(client):
+    """Run the clean-up once, as the background sweep does every minute."""
+    return client.app.state.service.cleanup()
+
+
+def make_older(settings, code, seconds):
+    """Pretend this game was created `seconds` ago."""
+    with sqlite3.connect(settings.db_path) as conn:
+        conn.execute("UPDATE games SET updated_at = ? WHERE code = ?", (time.time() - seconds, code))
+
+
+def stored(settings, code):
+    with sqlite3.connect(settings.db_path) as conn:
+        return conn.execute("SELECT 1 FROM games WHERE code = ?", (code,)).fetchone() is not None
+
+
+def test_a_lobby_closes_two_minutes_after_its_creator_leaves(settings):
+    clock = Clock()
+    client = TestClient(create_app(settings, clock=clock))
+    code, _ = create_race(client)  # the creator never asks again, as if the tab was closed
+
+    clock.advance(100)
+    run_cleanup(client)
+    assert stored(settings, code)  # still inside the two minutes
+
+    clock.advance(21)
+    run_cleanup(client)
+    assert not stored(settings, code)
+
+
+def test_a_lobby_stays_open_while_its_creator_keeps_asking(settings):
+    clock = Clock()
+    client = TestClient(create_app(settings, clock=clock))
+    code, a = create_race(client)
+    for _ in range(5):  # ten minutes pass, the creator's page asks every 100 seconds
+        clock.advance(100)
+        get(client, code, a)
+        run_cleanup(client)
+        assert stored(settings, code)
+
+
+def test_a_lobby_closes_after_fifteen_minutes_even_if_its_creator_is_still_there(settings):
+    clock = Clock()
+    client = TestClient(create_app(settings, clock=clock))
+    old_code, old_a = create_race(client)
+    recent_code, recent_a = create_race(client)
+    make_older(settings, old_code, 16 * 60)  # waiting for 16 minutes
+    make_older(settings, recent_code, 10 * 60)  # waiting for 10 minutes
+    get(client, old_code, old_a)  # both creators are looking at their lobby right now
+    get(client, recent_code, recent_a)
+
+    run_cleanup(client)
+    assert not stored(settings, old_code)
+    assert stored(settings, recent_code)
+
+
+def test_the_creator_of_a_closed_lobby_gets_not_found(settings):
+    clock = Clock()
+    client = TestClient(create_app(settings, clock=clock))
+    code, a = create_race(client)
+    make_older(settings, code, 16 * 60)
+    run_cleanup(client)
+    refused = get(client, code, a)
+    assert refused.status_code == 404
+    assert error_code(refused) == "NOT_FOUND"
+
+
+def test_a_race_that_has_started_is_not_treated_as_a_lobby(settings):
+    clock = Clock()
+    client = TestClient(create_app(settings, clock=clock))
+    code, a, b = start_race(client)
+    clock.advance(200)  # both players have been quiet for longer than a lobby may be
+    run_cleanup(client)
+    assert stored(settings, code)  # a game being played follows the 15-minute rule instead
+
+
+def test_after_a_restart_a_lobby_gets_two_minutes_of_benefit_of_the_doubt(settings):
+    clock = Clock()
+    first_run = TestClient(create_app(settings, clock=clock))
+    code, _ = create_race(first_run)
+
+    restarted = TestClient(create_app(settings, clock=clock))  # presence memory is empty again
+    run_cleanup(restarted)
+    assert stored(settings, code)  # the creator may be polling this very moment
+
+    clock.advance(121)
+    run_cleanup(restarted)
+    assert not stored(settings, code)
 
 
 # --- Secrecy ---------------------------------------------------------------------

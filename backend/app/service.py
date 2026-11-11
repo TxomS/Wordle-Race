@@ -84,42 +84,59 @@ class GameService:
         presence: Presence,
         ttl_seconds: float,
         finished_ttl_seconds: float,
+        lobby_max_wait_seconds: float,
+        lobby_silence_seconds: float,
         rng: random.Random | None = None,
     ) -> None:
         self.store = store
         self.words = words
         self.presence = presence
-        self.ttl_seconds = ttl_seconds  # for a game being played or waited for
+        self.ttl_seconds = ttl_seconds  # for a game being played
         self.finished_ttl_seconds = finished_ttl_seconds  # for a game that has finished
+        self.lobby_max_wait_seconds = lobby_max_wait_seconds  # longest a lobby may wait for a second player
+        self.lobby_silence_seconds = lobby_silence_seconds  # how long a lobby survives its creator leaving
         self.rng = rng  # tests can pass a seeded Random; None means secure randomness
 
     def cleanup(self) -> int:
-        """Delete abandoned games. A game is abandoned when BOTH hold:
-          - nobody has guessed in it or joined it for longer than its time limit, and
-          - no player's page has asked the server about it for longer than that limit.
-        The second rule keeps a game alive while someone still has it open: a lobby
-        waiting for a friend, or a player who walked away to think.
+        """Delete abandoned games. There are three kinds, each with its own rule.
 
-        The limit is long (15 minutes by default) for a game that is still being played or
-        waited for, and short (2 minutes) for a game that has finished: its result has been
-        shown, and a page stops asking about a game once it has seen it finish. Two minutes
-        is still enough for a slow background tab to ask once more and see who won.
+        A game being played is abandoned when BOTH hold:
+          - nobody has guessed in it for longer than the time limit (15 minutes), and
+          - no player's page has asked the server about it for longer than that.
+        The second rule keeps a game alive while someone still has it open, like a player
+        who walked away to think.
+
+        A finished game uses the same rule with a short limit (2 minutes): its result has
+        been shown, and a page stops asking about a game once it has seen it finish.
+
+        A lobby (a race waiting for its second player) is abandoned when EITHER holds:
+          - it has been waiting longer than the maximum wait (15 minutes), even if its
+            creator is still looking at it, or
+          - nobody has asked about it for a couple of minutes (the creator closed the tab).
+        A lobby has no progress to protect, so nobody is kept waiting in a page that is gone.
 
         After a backend restart, players not yet seen get a short benefit of the doubt (see
         presence.py). The background sweep (sweeper.py) calls this every minute."""
         now = time.time()  # the database stores wall-clock times
         with self.store.write() as conn:
-            stale = self.store.list_idle(conn, now - self.ttl_seconds, finished=False)
-            stale += self.store.list_idle(conn, now - self.finished_ttl_seconds, finished=True)
+            stale = self.store.list_idle(conn, now - self.ttl_seconds, rules.PLAYING)
+            stale += self.store.list_idle(conn, now - self.finished_ttl_seconds, rules.FINISHED)
             abandoned = [game.code for game in stale if not self._someone_is_here(game)]
+            for lobby, created in self.store.list_waiting(conn):
+                waited_too_long = now - created > self.lobby_max_wait_seconds
+                if waited_too_long or not self._someone_is_here(lobby, self.lobby_silence_seconds):
+                    abandoned.append(lobby.code)
             removed = self.store.delete(conn, abandoned)
         if removed:
             log.info("removed %d abandoned game(s)", removed)
         return removed
 
-    def _someone_is_here(self, game: Game) -> bool:
-        limit = self.finished_ttl_seconds if game.status == rules.FINISHED else self.ttl_seconds
-        return any(self.presence.seen_within(game.code, p.id, limit) for p in game.players)
+    def _someone_is_here(self, game: Game, window: float | None = None) -> bool:
+        """Has any player of this game been heard from within the window? By default the
+        window is the game's own limit: short once finished, long while being played."""
+        if window is None:
+            window = self.finished_ttl_seconds if game.status == rules.FINISHED else self.ttl_seconds
+        return any(self.presence.seen_within(game.code, p.id, window) for p in game.players)
 
     def create_game(self, mode: str) -> tuple[str, GameView]:
         """Create a game with its first player. Returns that player's secret token and view."""

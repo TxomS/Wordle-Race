@@ -2,10 +2,11 @@
 
 import sqlite3
 import threading
+import time
 
 import pytest
 
-from app.rules import SOLO, add_player, new_game, submit_guess
+from app.rules import RACE, SOLO, add_player, new_game, submit_guess
 from app.store import GameStore
 
 
@@ -65,7 +66,8 @@ def test_idle_games_can_be_listed_and_deleted(store):
         conn.execute("UPDATE games SET updated_at = 1000 WHERE code = 'OLD11'")
 
     with store.write() as conn:
-        assert [game.code for game in store.list_idle(conn, cutoff=2000, finished=False)] == ["OLD11"]
+        assert [game.code for game in store.list_idle(conn, cutoff=2000, status="playing")] == ["OLD11"]
+        assert store.list_idle(conn, cutoff=2000, status="finished") == []
         assert store.delete(conn, ["OLD11"]) == 1
     with store.read() as conn:
         assert store.load(conn, "OLD11") is None
@@ -81,8 +83,21 @@ def test_finished_games_are_listed_separately_from_unfinished_ones(store):
         conn.execute("UPDATE games SET status = 'finished' WHERE code = 'DONE1'")
 
     with store.read() as conn:
-        assert [game.code for game in store.list_idle(conn, cutoff=2000, finished=True)] == ["DONE1"]
-        assert [game.code for game in store.list_idle(conn, cutoff=2000, finished=False)] == ["LIVE2"]
+        assert [game.code for game in store.list_idle(conn, cutoff=2000, status="finished")] == ["DONE1"]
+        assert [game.code for game in store.list_idle(conn, cutoff=2000, status="playing")] == ["LIVE2"]
+
+
+def test_lobbies_are_listed_with_the_time_they_were_created(store):
+    lobby = new_game("LOBBY", "crane", RACE)
+    add_player(lobby, "creator")  # a race with one player is a lobby
+    with store.write() as conn:
+        store.insert(conn, lobby)
+        store.insert(conn, make_game("LIVE2"))  # a game being played is not a lobby
+
+    with store.read() as conn:
+        listed = store.list_waiting(conn)
+    assert [game.code for game, _ in listed] == ["LOBBY"]
+    assert abs(listed[0][1] - time.time()) < 5
 
 
 def test_data_is_still_there_for_a_new_store_on_the_same_file(store):

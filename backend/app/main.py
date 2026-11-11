@@ -35,6 +35,8 @@ def create_app(settings: Settings | None = None, clock: Callable[[], float] = ti
         presence,
         ttl_seconds=ttl_seconds,
         finished_ttl_seconds=settings.finished_game_ttl_minutes * 60,
+        lobby_max_wait_seconds=settings.lobby_max_wait_minutes * 60,
+        lobby_silence_seconds=settings.lobby_silence_minutes * 60,
     )
     sweeper = Sweeper(service.cleanup, interval_seconds=settings.sweep_interval_minutes * 60)
 
