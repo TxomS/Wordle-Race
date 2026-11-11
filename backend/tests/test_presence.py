@@ -48,6 +48,21 @@ def test_players_are_tracked_per_game():
     assert not presence.is_connected("G1", "p1")
 
 
+def test_silent_for_counts_the_seconds_since_the_last_sign_of_life():
+    presence, clock = make()
+    presence.touch("G1", "p1")
+    clock.advance(42)
+    assert presence.silent_for("G1", "p1") == 42
+    presence.touch("G1", "p1")
+    assert presence.silent_for("G1", "p1") == 0
+
+
+def test_silent_for_counts_from_startup_for_someone_never_seen():
+    presence, clock = make()
+    clock.advance(30)
+    assert presence.silent_for("G1", "never-seen") == 30
+
+
 def test_seen_within_answers_for_the_window_it_is_given():
     presence, clock = make()
     presence.touch("G1", "p1")

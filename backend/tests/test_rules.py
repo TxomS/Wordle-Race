@@ -26,6 +26,7 @@ from app.rules import (
     new_game,
     result_for,
     submit_guess,
+    take_over_seat,
 )
 
 ANSWER = "crane"
@@ -91,6 +92,39 @@ def test_cannot_guess_before_the_opponent_has_joined():
     add_player(game, "a")
     with pytest.raises(GameNotStarted):
         play(game, "a", "slate")
+
+
+# --- Taking over a seat -------------------------------------------------------------
+
+
+def test_a_seat_can_be_taken_over_and_keeps_everything_already_played():
+    game = race_game()
+    play(game, "a", "slate")
+    seat = take_over_seat(game, "a", "newcomer")
+
+    assert seat.id == "newcomer"
+    assert [guess.word for guess in seat.guesses] == ["slate"]
+    with pytest.raises(NotInGame):
+        play(game, "a", "sloth")  # the old id no longer works
+    play(game, "newcomer", "sloth")  # the new one carries on from the same board
+    assert len(seat.guesses) == 2
+
+
+def test_a_solo_game_never_gives_up_its_seat():
+    with pytest.raises(RoomFull):
+        take_over_seat(solo_game(), "p1", "newcomer")
+
+
+def test_a_finished_game_does_not_give_up_a_seat():
+    game = race_game()
+    play(game, "a", ANSWER)
+    with pytest.raises(GameOver):
+        take_over_seat(game, "b", "newcomer")
+
+
+def test_a_seat_that_does_not_exist_cannot_be_taken_over():
+    with pytest.raises(NotInGame):
+        take_over_seat(race_game(), "nobody", "newcomer")
 
 
 # --- Accepting and refusing a guess ---------------------------------------------

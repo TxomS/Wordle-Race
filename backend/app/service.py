@@ -139,19 +139,49 @@ class GameService:
         raise RuntimeError("could not find a free game code")
 
     def join_game(self, code: str) -> tuple[str, GameView]:
-        """Take the free seat in a game. The write lock means that if two people join the
-        last seat at the same moment, exactly one gets it and the other gets ROOM_FULL."""
+        """Get a seat in a game, and the token for it.
+
+        - If a seat is free, take it.
+        - If not, but a player has disconnected (the same "Disconnected" the other player
+          sees), take over that seat. The newcomer carries on from the same board, and the
+          old player's token stops working. This is how someone who closed the tab and lost
+          it gets back in, just by using the game's code again.
+        - Otherwise the game is full (ROOM_FULL).
+
+        The write lock means that if two people arrive at the same moment, they cannot both
+        get the same seat."""
         token = new_token()
         player_id = hash_token(token)
+        took_over = False
         with self.store.write() as conn:
             game = self.store.load(conn, _clean_code(code))
             if game is None:
                 raise GameNotFound()
-            rules.add_player(game, player_id)
+            if len(game.players) < game.capacity:
+                rules.add_player(game, player_id)
+            else:
+                seat = self._disconnected_seat(game)
+                rules.take_over_seat(game, seat.id, player_id)
+                took_over = True
             self.store.save(conn, game)
-        self.presence.touch(game.code, player_id)
-        log.info("player joined code=%s player=%d", game.code, _player_number(game, player_id))
+            # Done inside the transaction, before anyone else can get the lock: otherwise a
+            # second newcomer could look, see the seat's new owner as "not seen yet", and
+            # take the same seat again.
+            self.presence.touch(game.code, player_id)
+        if took_over:
+            log.info("player took over a disconnected seat code=%s player=%d", game.code, _player_number(game, player_id))
+        else:
+            log.info("player joined code=%s player=%d", game.code, _player_number(game, player_id))
         return token, self._view(game, player_id)
+
+    def _disconnected_seat(self, game: Game):
+        """The seat a newcomer may take: one whose player shows as disconnected. If both do,
+        the one that has been silent the longest, since that is the likelier one to belong
+        to somebody who is not coming back."""
+        gone = [p for p in game.players if not self.presence.is_connected(game.code, p.id)]
+        if not gone:
+            raise rules.RoomFull()
+        return max(gone, key=lambda p: self.presence.silent_for(game.code, p.id))
 
     def get_game(self, code: str, token: str) -> GameView:
         """Read-only: used for polling and for coming back after a refresh."""

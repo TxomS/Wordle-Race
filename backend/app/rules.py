@@ -221,6 +221,22 @@ def get_player(game: Game, player_id: str) -> Player:
     raise NotInGame()
 
 
+def take_over_seat(game: Game, old_player_id: str, new_player_id: str) -> Player:
+    """Give an existing seat, with everything already played from it, to a new player.
+
+    Used when a player has disconnected and someone new arrives with the game's code: the
+    newcomer carries on from the same board, and the old player's id (so their token)
+    stops working. Only a race gives up a seat (a solo game's one seat never moves), and
+    not once the game is over."""
+    if game.mode != RACE:
+        raise RoomFull()
+    if game.status == FINISHED:
+        raise GameOver()
+    player = get_player(game, old_player_id)
+    player.id = new_player_id
+    return player
+
+
 def submit_guess(
     game: Game,
     player_id: str,

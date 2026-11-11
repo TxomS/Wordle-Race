@@ -67,3 +67,10 @@ class Presence:
 
     def is_connected(self, code: str, player_id: str) -> bool:
         return self.seen_within(code, player_id, self.timeout)
+
+    def silent_for(self, code: str, player_id: str) -> float:
+        """Seconds since this player was last heard from. Someone not seen since startup
+        counts from the moment of startup."""
+        now = self._clock()
+        last = self._last_seen.get((code, player_id))
+        return now - (self._started if last is None else last)

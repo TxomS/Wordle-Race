@@ -2,6 +2,7 @@
 
 import logging
 import threading
+import time
 from concurrent.futures import ThreadPoolExecutor
 
 from fastapi.testclient import TestClient
@@ -113,6 +114,145 @@ def test_when_two_people_join_the_last_seat_together_exactly_one_gets_it(setting
 
         assert sorted(r.status_code for r in results) == [201, 409]
         assert error_code(next(r for r in results if r.status_code == 409)) == "ROOM_FULL"
+
+
+# --- Taking over the seat of a player who has disconnected -----------------------------
+
+
+def race_where_b_has_gone_quiet(settings):
+    """A race in progress. A is still polling; B has said nothing for 20 seconds."""
+    clock = Clock()
+    client = TestClient(create_app(settings, clock=clock))
+    code, a, b = start_race(client)
+    guess(client, code, a, "slate")
+    guess(client, code, b, "boost")
+    clock.advance(20)
+    get(client, code, a)  # A is still around
+    return client, clock, code, a, b
+
+
+def test_a_newcomer_takes_over_a_disconnected_players_seat_and_carries_on(settings):
+    client, clock, code, a, b = race_where_b_has_gone_quiet(settings)
+    assert opponent_connected(client, code, a) is False  # B shows as disconnected
+
+    response = join(client, code)
+    assert response.status_code == 201
+    body = response.json()
+    c = {"X-Player-Token": body["token"]}
+    assert body["game"]["status"] == "playing"
+    assert [g["word"] for g in body["game"]["me"]["guesses"]] == ["boost"]  # B's board, as B left it
+
+    assert opponent_connected(client, code, a) is True  # A sees their opponent back ...
+    assert len(get(client, code, a).json()["opponent"]["guesses"]) == 1  # ... with the same one guess
+    assert get(client, code, b).status_code == 401  # and B's old token no longer works
+
+    assert guess(client, code, c, ANSWER).json()["result"]["outcome"] == "won"  # the newcomer can really play
+    assert get(client, code, a).json()["result"]["outcome"] == "lost"
+
+
+def test_a_seat_only_opens_up_once_the_player_has_been_silent_long_enough(settings):
+    clock = Clock()
+    client = TestClient(create_app(settings, clock=clock))
+    code, a, b = start_race(client)
+
+    clock.advance(10)
+    get(client, code, a)
+    get(client, code, b)
+    refused = join(client, code)  # both are around: the game is full
+    assert refused.status_code == 409
+    assert error_code(refused) == "ROOM_FULL"
+
+    clock.advance(20)
+    get(client, code, a)  # only A keeps polling
+    assert join(client, code).status_code == 201  # B has now been silent for 20 seconds
+
+
+def test_when_both_players_are_gone_the_one_gone_longer_is_replaced(settings):
+    clock = Clock()
+    client = TestClient(create_app(settings, clock=clock))
+    code, a, b = start_race(client)
+    guess(client, code, a, "slate")
+    guess(client, code, b, "boost")
+    clock.advance(5)
+    get(client, code, a)  # A is last heard from 5 seconds after B
+    clock.advance(30)  # now both have gone quiet, B for longer
+
+    response = join(client, code)
+    assert [g["word"] for g in response.json()["game"]["me"]["guesses"]] == ["boost"]  # B's seat
+
+
+def test_a_solo_game_is_never_taken_over(settings):
+    clock = Clock()
+    client = TestClient(create_app(settings, clock=clock))
+    code = client.post("/api/games", json={"mode": "solo"}).json()["code"]
+    clock.advance(60)  # the player has long gone quiet
+    refused = join(client, code)
+    assert refused.status_code == 409
+    assert error_code(refused) == "ROOM_FULL"
+
+
+def test_a_finished_race_is_not_taken_over(settings):
+    clock = Clock()
+    client = TestClient(create_app(settings, clock=clock))
+    code, a, b = start_race(client)
+    guess(client, code, a, ANSWER)
+    clock.advance(60)  # both pages have stopped asking
+    refused = join(client, code)
+    assert refused.status_code == 409
+    assert error_code(refused) == "GAME_OVER"
+
+
+def test_two_newcomers_at_once_cannot_take_the_same_seat(settings):
+    clock = Clock()
+    app = create_app(settings, clock=clock)
+    for _ in range(10):
+        setup = TestClient(app)
+        code, a, b = start_race(setup)
+        clock.advance(20)
+        get(setup, code, a)  # A is around, B is gone: exactly one seat is open
+        barrier = threading.Barrier(2)
+
+        def try_to_join():
+            client = TestClient(app)
+            barrier.wait()
+            return join(client, code)
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            results = list(pool.map(lambda _: try_to_join(), range(2)))
+
+        assert sorted(r.status_code for r in results) == [201, 409]
+
+
+def test_a_newcomer_is_recorded_before_the_next_one_may_look_at_the_seat(settings):
+    """Makes the one risky moment last: recording the newcomer as present is made slow. If it
+    happened after the database lock was released, a second newcomer would get in during
+    that time, see the seat's new owner as "not seen yet", and take the same seat."""
+    clock = Clock()
+    app = create_app(settings, clock=clock)
+    setup = TestClient(app)
+    code, a, b = start_race(setup)
+    clock.advance(20)
+    get(setup, code, a)  # A is around, B is gone: exactly one seat is open
+
+    presence = app.state.service.presence
+    record = presence.touch
+
+    def slow_touch(game_code, player_id):
+        time.sleep(0.3)
+        record(game_code, player_id)
+
+    presence.touch = slow_touch
+    barrier = threading.Barrier(2)
+
+    def try_to_join():
+        client = TestClient(app)
+        barrier.wait()
+        return join(client, code)
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(lambda _: try_to_join(), range(2)))
+
+    assert sorted(r.status_code for r in results) == [201, 409]
 
 
 # --- Secrecy ---------------------------------------------------------------------

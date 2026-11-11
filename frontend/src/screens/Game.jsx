@@ -164,7 +164,7 @@ export default function Game({ code, navigate }) {
           </button>
         }
       >
-        <p>This browser tab is not part of the game yet.</p>
+        <p>This browser tab has no seat in the game. If a player has disconnected, you can take their seat.</p>
         {joinError && (
           <p className="error" role="alert">
             {joinError}
