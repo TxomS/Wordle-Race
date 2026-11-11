@@ -20,12 +20,18 @@ The first run builds the images and takes a few minutes. `make setup` returns wh
 
 ## How to play
 
-- **Goal:** Find the hidden 5-letter word in 6 guesses. Type on your keyboard or tap the on-screen keys; Enter submits.
-- **Colors:** green means right letter, right place. Yellow means the letter is in the word, but somewhere else. Grey means it is not in the word, or all its copies are already accounted for. A letter is marked only as many times as it appears in the word, greens first (the word ABBEY and the guess BABES give yellow, yellow, green, green, grey).
-- **Play Solo:** the server picks a word and you play alone.
-- **Play Co-op:** you get a 5-character code and a link. Your friend opens the link and clicks "Join this game", or types the code into the Join box on the home page. The race starts the moment they join. You each see the other's progress as colored squares and whether they are connected. The first player to solve it wins; if both run out of guesses it is a draw.
-- **Refresh:** reloading the page puts you back in your game.
-- **Lost your tab?** If a player has been silent for 15 seconds their seat shows "Disconnected". Anyone who uses the game's code can take that seat and carries on from the same board, so closing the tab and using the code again gets you back in. A seat is only taken over when its player is disconnected, never in a solo game, and never after the game has ended.
+Find the hidden 5-letter word in 6 guesses or less!
+Type on your keyboard or tap the on-screen keys to guess.
+
+🟩 Right letter, right place
+🟨 In the word, but somewhere else
+⬜ Not in the word
+
+**Play Solo:** Guess alone and see how fast you can get the word!
+
+**Play Co-op:** Race your friend to see who can guess the word quicker!
+
+**Lost your tab?** No problem! Just give your friend the lobby code again to enter.
 
 ## Make targets
 

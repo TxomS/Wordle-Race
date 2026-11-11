@@ -30,10 +30,10 @@ On a restart no game is lost (checked with `docker compose restart` and with a h
 
 ## Other choices
 
-- **Scoring** is two passes: greens first, then yellows from the letters left over. It is tested with ABBEY and BABES example.
-- **Solo is a race with one player** so there is one code path.
-- **Room codes** are 5 characters from 31 symbols with no look-alikes (about 28 million codes).
-- **Word lists** 100 answers, 3,285 allowed words. They are mounted from `backend/data`, so they can be swapped and restart the backend.
+- **Scoring:** is two passes: greens first, then yellows from the letters left over. It is tested with ABBEY and BABES example.
+- **Solo is a race with one player:** so there is one code path.
+- **Room codes:** are 5 characters from 31 symbols with no look-alikes (about 28 million codes).
+- **Word lists:** 100 answers, 3,285 allowed words. They are mounted from `backend/data`, so they can be swapped and restart the backend.
 
 ## Known limitations
 
