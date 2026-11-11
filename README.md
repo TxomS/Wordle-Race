@@ -27,8 +27,8 @@ Type on your keyboard or tap the on-screen keys to guess.<br>
 🟨 In the word, but somewhere else<br>
 ⬜ Not in the word<br>
 
-**Play Solo:** Guess alone and see how fast you can get the word!
-**Play Co-op:** Race your friend to see who can guess the word quicker!<br>
+**Play Solo:** Guess alone and see how fast you can get the word!<br>
+**Play Co-op:** Race your friend to see who can guess the word quicker!<br><br>
 **Lost your tab?** No problem! Just give your friend the lobby code again to enter.
 
 ## Make targets
