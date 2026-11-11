@@ -20,17 +20,17 @@ The first run builds the images and takes a few minutes. `make setup` returns wh
 
 ## How to play
 
-Find the hidden 5-letter word in 6 guesses or less!
+Find the hidden 5-letter word in 6 guesses or less!<br>
 Type on your keyboard or tap the on-screen keys to guess.
-
-🟩 Right letter, right place
-🟨 In the word, but somewhere else
+<br>
+🟩 Right letter, right place<br>
+🟨 In the word, but somewhere else<br>
 ⬜ Not in the word
-
+<br>
 **Play Solo:** Guess alone and see how fast you can get the word!
 
 **Play Co-op:** Race your friend to see who can guess the word quicker!
-
+<br>
 **Lost your tab?** No problem! Just give your friend the lobby code again to enter.
 
 ## Make targets
